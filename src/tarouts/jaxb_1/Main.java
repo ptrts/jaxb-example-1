@@ -1,5 +1,8 @@
 package tarouts.jaxb_1;
 
+import tarouts.jaxb_1.business.DirectoryEntry;
+import tarouts.jaxb_1.mapping.TR;
+
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.Marshaller;
 import java.io.*;
@@ -9,77 +12,49 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.*;
+import java.nio.file.attribute.FileTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 
 public class Main {
 
-	public static void doExample() {
+	public static List<DirectoryEntry> getDirectoryEntries(Path path) {
 
-		//Переменная, ранее описанного класса(Customer):
-		Customer customer = new Customer();
-		customer.setId(100);
-		customer.setName("Pavel");
-		customer.setAge(99);
+		// Делаем поток чтения содержимого директории
+		DirectoryStream<Path> directoryStream = Files.newDirectoryStream(directoryPath);
 
-		try
-		{
-			// Открываем XML файл
-			File file = new File("jaxb.xml");
+		// Заготавливаем список элементов директории
+		List<DirectoryEntry> entries = new ArrayList<>();
 
-			// Открываем контекст, связанный с нашим классом Customer
-			JAXBContext jaxbContext = JAXBContext.newInstance(Customer.class);
-			Marshaller jaxbMarshaller = jaxbContext.createMarshaller();
 
-			// Указываем, что вывод будет форматированным
-			jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+		DirectoryEntry entry = new DirectoryEntry(
+				"..",
+				true,
+				0,
+				null
+		);
 
-			// Выплевываем объект в файл
-			jaxbMarshaller.marshal(customer, file);
+		// Цикл по всем элементам директории
+		for (Path childPath : directoryStream) {
 
-			// Выплевываем объект в System.out
-			jaxbMarshaller.marshal(customer, System.out);
-		}
-		catch (Exception ex)
-		{
-			System.out.println(ex.getLocalizedMessage());
-			ex.printStackTrace();
-		}
-	}
+			BasicFileAttributeView attributeView = Files.getFileAttributeView(childPath, BasicFileAttributeView.class);
 
-	public static void main(String[] args) throws IOException {
+			BasicFileAttributes fileAttributes = attributeView.readAttributes();
 
-		if (args.length == 0) {
-			System.out.println("No directory specified");
-			return;
+			entry = new DirectoryEntry(
+					childPath.getFileName().toString(),
+					fileAttributes.isDirectory(),
+					fileAttributes.size(),
+					fileAttributes.lastModifiedTime()
+			);
+
+			entries.add(entry);
 		}
 
-		OutputStream outputStream = null;
-
-		try {
-
-			Path directoryPath = Paths.get(args[0]);
-
-			DirectoryStream<Path> directoryStream = Files.newDirectoryStream(directoryPath);
-
-			List<DirectoryEntry> entries = new ArrayList<>();
-
-			for (Path childPath : directoryStream) {
-
-				BasicFileAttributeView attributeView = Files.getFileAttributeView(childPath, BasicFileAttributeView.class);
-
-				BasicFileAttributes fileAttributes = attributeView.readAttributes();
-
-				DirectoryEntry entry = new DirectoryEntry(
-						childPath.getFileName().toString(),
-						fileAttributes.isDirectory(),
-						fileAttributes.size(),
-						fileAttributes.lastModifiedTime()
-				);
-
-				entries.add(entry);
-			}
-
-			Collections.sort(
+		// Сортируем чего насобирали
+		Collections.sort(
 				entries,
 				new Comparator<DirectoryEntry>() {
 					@Override
@@ -93,11 +68,36 @@ public class Main {
 						}
 					}
 				}
-			);
+		);
 
-			for (DirectoryEntry entry : entries) {
-				System.out.println(entry.getName());
-			}
+		return entries;
+	}
+
+	public static void main(String[] args) throws IOException {
+
+		if (args.length == 0) {
+			System.out.println("No directory specified");
+			return;
+		}
+
+		OutputStream outputStream = null;
+		PrintWriter printWriter = null;
+
+		InputStream inputStream = null;
+		BufferedReader bufferedReader = null;
+
+		try {
+
+			// Получаем директорию из параметра вызова
+			Path directoryPath = Paths.get(args[0]);
+
+			// Получаем список объектов "DirectoryEntry"
+			List<DirectoryEntry> entries = getDirectoryEntries(directoryPath);
+
+
+			///////////////////////////////////////////////////////////////
+			// ПОЛУЧАЕМ PRINT WRITER
+			///////////////////////////////////////////////////////////////
 
 			// Получаем полный путь "index.xhtml"
 			Path indexPath = Paths.get(directoryPath.toString(), "index.xhtml");
@@ -112,59 +112,71 @@ public class Main {
 			BufferedWriter bufferedWriter = new BufferedWriter(outputStreamWriter);
 
 			// Оборачиваем буферизированный символьный поток в PrintWriter, который умеет делать форматированный вывод
-			PrintWriter printWriter = new PrintWriter(bufferedWriter);
-
-			printWriter.println("");
-
-			//<tr>
-			//<td>
-			//<a href="1.txt">1.txt</a>
-			//</td>
-			//<td>
-			//		01.01.2013
-			//		</td>
-			//<td>
-			//		1Kb
-			//		</td>
-			//</tr>
-			//<tr>
-			//<td>
-			//<a href="1.txt">1.txt</a>
-			//</td>
-			//<td>
-			//		01.01.2013
-			//		</td>
-			//<td>
-			//		1Kb
-			//		</td>
-			//</tr>
+			printWriter = new PrintWriter(bufferedWriter);
 
 
-			//<?xml version="1.0" encoding="UTF-8" ?>
-			//<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-			//<html xmlns="http://www.w3.org/1999/xhtml">
-			//<head>
-			//<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-			//<title>Directory contents</title>
-			//<style>
-			//		td {
-			//	width: 200px;
-			//	border: 1px solid black;
-			//}
-			//</style>
-			//</head>
-			//<body>
-			//<table>
-			//<here/>
-			//</table>
-			//</body>
-			//</html>
+			///////////////////////////////////////////////////////////////
+			// ПОЛУЧАЕМ BUFFERED READER
+			///////////////////////////////////////////////////////////////
 
+			inputStream = Main.class.getResourceAsStream("template.xhtml");
+			InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
+			bufferedReader = new BufferedReader(inputStreamReader);
+
+
+			///////////////////////////////////////////////////////////////
+			// ИНИЦИАЛИЗИРУЕМ МАРШАЛЛЕР
+			///////////////////////////////////////////////////////////////
+
+			// Открываем контекст, связанный с нашим классом Customer
+			JAXBContext jaxbContext = JAXBContext.newInstance(TR.class);
+			Marshaller jaxbMarshaller = jaxbContext.createMarshaller();
+
+			// Делаем настройки маршаллера
+			jaxbMarshaller.setProperty("com.sun.xml.bind.xmlDeclaration", false);
+			jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+
+
+			///////////////////////////////////////////////////////////////
+			// БЕРЕМ С ТЕМПЛЕЙТА - ПИШЕМ В ФАЙЛ (ИНОГДА ЧЕРЕЗ МАРШАЛЛЕР)
+			///////////////////////////////////////////////////////////////
+
+			String line = bufferedReader.readLine();
+			while (line != null) {
+
+				String trimmedLine = line.trim();
+
+				if (trimmedLine.equals("HERE!")) {
+
+					for (DirectoryEntry directoryEntry : entries) {
+
+						FileTime lastModifiedTime = directoryEntry.getLastModifiedTime();
+
+						TR tr = new TR(
+								directoryEntry.getName(),
+								directoryEntry.getName(),
+								Long.toString(directoryEntry.getSize()),
+								lastModifiedTime == null ? "" : lastModifiedTime.toString()
+						);
+
+						// Выплевываем объект в файл
+						jaxbMarshaller.marshal(tr, printWriter);
+					}
+
+				} else {
+					printWriter.println(line);
+				}
+
+				line = bufferedReader.readLine();
+			}
 
 
 		} catch (Exception e) {
 			e.printStackTrace(System.out);
 		} finally {
+			if (printWriter != null) {
+				printWriter.close();
+			}
 			if (outputStream != null) {
 				outputStream.close();
 			}
